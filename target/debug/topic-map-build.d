@@ -1,1 +1,1 @@
-/Users/dorian/Private/builder/target/debug/topic-map-build: /Users/dorian/Private/builder/build.rs /Users/dorian/Private/builder/path/to/binance.json /Users/dorian/Private/builder/src/bin/topic-map-build.rs /Users/dorian/Private/builder/src/lib.rs /Users/dorian/Private/builder/src/topic/mod.rs
+/Users/dorian/Private/builder/target/debug/topic-map-build: /Users/dorian/Private/builder/src/bin/topic-map-build.rs

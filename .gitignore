@@ -1,2 +1,26 @@
-snapshots
-target
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cargo files
+Cargo.lock
+.cargo/
+
+# Logs and temp
+*.log
+*.tmp
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Snapshots and generated files
+/snapshots/topic.map.fst
+/snapshots/manifest.json
+/out/
