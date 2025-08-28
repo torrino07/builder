@@ -4,7 +4,7 @@ use alloy::primitives::FixedBytes;
 
 fn main() -> anyhow::Result<()> {
     // ✅ Load FST from disk into memory
-    let bytes = fs::read("snapshots/topic.map.fst")?;
+    let bytes = fs::read("topic.map.fst")?;
     let map = Map::new(bytes)?;
 
     // ✅ Binance symbol test (zero alloc)
