@@ -1,56 +1,97 @@
+pub mod utils;
 use std::{env, fs, path::Path};
 use fst::MapBuilder;
 use serde_json::Value;
 use std::collections::HashSet;
+use utils::{
+    b32_to_hex0x,
+    looks_like_0x32bytes,
+    parse_hex_0x_to_b32
+};
+
+trait SourceParser {
+    fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>>;
+}
+
+struct BinanceParser;
+struct UniswapParser;
+
+impl SourceParser for BinanceParser {
+    fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>> {
+        let json: Value = serde_json::from_str(data)?;
+        let symbols = json.as_object()
+            .ok_or_else(|| anyhow::anyhow!("Expected JSON object"))?
+            .keys()
+            .map(|k| k.as_bytes().to_vec())
+            .collect();
+        Ok(symbols)
+    }
+}
+
+impl SourceParser for UniswapParser {
+    fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>> {
+        let json: Value = serde_json::from_str(data)?;
+        let mut ids = HashSet::new();
+        collect_b32_hex_strings(&json, &mut ids);
+        let mut pools: Vec<_> = ids.into_iter().collect();
+        pools.sort_unstable();
+        Ok(pools.into_iter().map(|p| b32_to_hex0x(p).to_vec()).collect())
+    }
+}
+
+struct Source<'a> {
+    name: &'a str,
+    parser: Box<dyn SourceParser>,
+    path: &'a str,
+    id_start: u64,
+}
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 {
-        eprintln!("Usage: topic-map-build <binance.json> <uniswap.json> <out_dir>");
+        eprintln!("Usage: topic-map-build <out_dir> <source1.json> <source2.json> ...");
         std::process::exit(1);
     }
 
-    let bin_data = fs::read_to_string(&args[1])?;
-    let uni_data = fs::read_to_string(&args[2])?;
-    let out_dir = Path::new(&args[3]);
+    let out_dir = Path::new(&args[1]);
     fs::create_dir_all(out_dir)?;
 
-    // Parse Binance
-    let bin_json: Value = serde_json::from_str(&bin_data)?;
-    let bin_symbols: Vec<String> = bin_json.as_object()
-        .unwrap()
-        .keys()
-        .cloned()
-        .collect();
+    // Define sources with ID ranges
+    let sources = vec![
+        Source {
+            name: "binance",
+            parser: Box::new(BinanceParser),
+            path: &args[2],
+            id_start: 0,
+        },
+        Source {
+            name: "uniswap",
+            parser: Box::new(UniswapParser),
+            path: &args[3],
+            id_start: 10_000,
+        },
+    ];
 
-    // Assign Binance IDs: 0..9999
-    let bin_pairs: Vec<(Vec<u8>, u64)> = bin_symbols
-        .iter()
-        .enumerate()
-        .map(|(i, sym)| (sym.as_bytes().to_vec(), i as u64))
-        .collect();
-
-    // Parse Uniswap
-    let uni_json: Value = serde_json::from_str(&uni_data)?;
-    let mut uni_ids: HashSet<[u8; 32]> = HashSet::new();
-    collect_b32_hex_strings(&uni_json, &mut uni_ids);
-
-    // Assign Uniswap IDs: 10000..N
-    let mut uni_pools: Vec<[u8; 32]> = uni_ids.into_iter().collect();
-    uni_pools.sort_unstable();
-    let uni_pairs: Vec<(Vec<u8>, u64)> = uni_pools
-        .iter()
-        .enumerate()
-        .map(|(i, p)| (b32_to_hex0x(*p).to_vec(), 10000 + i as u64))
-        .collect();
-
-    // Merge and sort
     let mut all_pairs = vec![];
-    all_pairs.extend(bin_pairs.iter().cloned());
-    all_pairs.extend(uni_pairs.iter().cloned());
+    let mut manifest = serde_json::Map::new();
+
+    for source in sources {
+        let data = fs::read_to_string(source.path)?;
+        let entries = source.parser.parse(&data)?;
+        let pairs: Vec<_> = entries
+            .into_iter()
+            .enumerate()
+            .map(|(i, k)| (k, source.id_start + i as u64))
+            .collect();
+        manifest.insert(
+            source.name.to_string(),
+            serde_json::json!({ "count": pairs.len() }),
+        );
+        all_pairs.extend(pairs);
+    }
+
     all_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // Write FST
     let swap_path = out_dir.join("topic.map.fst");
     let file = std::fs::File::create(&swap_path)?;
     let mut builder = MapBuilder::new(file)?;
@@ -59,16 +100,8 @@ fn main() -> anyhow::Result<()> {
     }
     builder.finish()?;
 
-    // Manifest
-    fs::write(
-        out_dir.join("manifest.json"),
-        serde_json::json!({
-            "version": 1,
-            "binance": { "symbol_count": bin_pairs.len() },
-            "uniswap": { "swap_count": uni_pairs.len() }
-        })
-        .to_string(),
-    )?;
+    manifest.insert("version".to_string(), serde_json::json!(1));
+    fs::write(out_dir.join("manifest.json"), serde_json::to_string_pretty(&manifest)?)?;
 
     eprintln!("Wrote {} ({} entries)", swap_path.display(), all_pairs.len());
     Ok(())
@@ -96,35 +129,4 @@ fn collect_b32_hex_strings(v: &Value, out: &mut HashSet<[u8; 32]>) {
         }
         _ => {}
     }
-}
-
-#[inline]
-fn looks_like_0x32bytes(s: &str) -> bool {
-    s.len() == 66 && s.starts_with("0x") &&
-        s[2..].chars().all(|c| c.is_ascii_hexdigit())
-}
-
-#[inline]
-fn parse_hex_0x_to_b32(s: &str) -> anyhow::Result<[u8; 32]> {
-    let bytes = hex::decode(&s[2..])?;
-    if bytes.len() != 32 {
-        anyhow::bail!("decoded length {}, expected 32", bytes.len());
-    }
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&bytes);
-    Ok(out)
-}
-
-#[inline]
-fn b32_to_hex0x(pool: [u8; 32]) -> [u8; 66] {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = [0u8; 66];
-    out[0] = b'0';
-    out[1] = b'x';
-    for i in 0..32 {
-        let b = pool[i];
-        out[2 + i * 2] = HEX[(b >> 4) as usize];
-        out[3 + i * 2] = HEX[(b & 0x0f) as usize];
-    }
-    out
 }
