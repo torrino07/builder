@@ -3,38 +3,34 @@ use std::fs;
 use alloy::primitives::FixedBytes;
 
 fn main() -> anyhow::Result<()> {
-    // ✅ Load FST from disk into memory
+    // If you want to avoid copying the file into memory, use Map::from_path for mmap:
+    // let map = Map::from_path("topic.map.fst")?;
     let bytes = fs::read("topic.map.fst")?;
     let map = Map::new(bytes)?;
 
-    // ✅ Binance symbol test (zero alloc)
-    let binance_symbol = "ETHBTC";
-    if let Some(id) = map.get(binance_symbol.as_bytes()) {
-        println!("Binance symbol '{}' → Topic ID: {}", binance_symbol, id);
+    // ✅ Binance (ASCII key) — byte literal avoids allocation
+    let binance_symbol = b"ETHUSDT";
+    if let Some(id) = map.get(binance_symbol) {
+        println!("Binance 'ETHUSDT' → Topic ID: {id}");
     } else {
-        println!("Binance symbol '{}' not found.", binance_symbol);
+        println!("Binance 'ETHUSDT' not found.");
     }
 
-    // ✅ Uniswap pool ID test (zero alloc)
-    let uniswap_pool_id = "0x0003be2d3d4202dff5766085e6c00742a32ef88ebabed380ab1ec4fbb416604d";
-    if let Ok(pool) = uniswap_pool_id.parse::<FixedBytes<32>>() {
-        let mut buf = [0u8; 66];
-        buf[0] = b'0';
-        buf[1] = b'x';
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        for i in 0..32 {
-            let b = pool[i];
-            buf[2 + i * 2] = HEX[(b >> 4) as usize];
-            buf[3 + i * 2] = HEX[(b & 0x0f) as usize];
-        }
+    // ✅ Uniswap (raw 32-byte key)
+    // IMPORTANT: This assumes your builder stored Uniswap keys as RAW 32 BYTES (no "0x", no hex)
+    let pool_str = "0x2d97d14362ae5a19a15adb230cf8840ee7e133bf942fd8efd754ae4d078727ea";
 
-        if let Some(id) = map.get(&buf) {
-            println!("Uniswap pool '{}' → Topic ID: {}", uniswap_pool_id, id);
-        } else {
-            println!("Uniswap pool '{}' not found.", uniswap_pool_id);
-        }
+    // Parse the hex string once into FixedBytes<32>
+    let pool: FixedBytes<32> = pool_str.parse()?; // errors if format/len invalid
+
+    println!("{:?}", pool);
+    println!("{:?}", pool.as_slice());
+
+    // Avoid type inference ambiguity (E0283) by specifying K = &[u8]
+    if let Some(id) = map.get(&pool.as_slice()) {
+        println!("Uniswap '{pool_str}' → Topic ID: {id}");
     } else {
-        println!("Invalid Uniswap pool ID format.");
+        println!("Uniswap '{pool_str}' not found.");
     }
 
     Ok(())

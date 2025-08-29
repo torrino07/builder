@@ -28,16 +28,32 @@ impl SourceParser for BinanceParser {
     }
 }
 
+// impl SourceParser for UniswapParser {
+//     fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>> {
+//         let json: Value = serde_json::from_str(data)?;
+//         let mut ids = HashSet::new();
+//         collect_b32_hex_strings(&json, &mut ids);
+//         let mut pools: Vec<_> = ids.into_iter().collect();
+//         pools.sort_unstable();
+//         Ok(pools.into_iter().map(|p| b32_to_hex0x(p).to_vec()).collect())
+//     }
+// }
+
 impl SourceParser for UniswapParser {
     fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>> {
         let json: Value = serde_json::from_str(data)?;
-        let mut ids = HashSet::new();
+        let mut ids = std::collections::HashSet::<[u8; 32]>::new();
         collect_b32_hex_strings(&json, &mut ids);
-        let mut pools: Vec<_> = ids.into_iter().collect();
+
+        // Sort for stable ID assignment within source (like before)
+        let mut pools: Vec<[u8; 32]> = ids.into_iter().collect();
         pools.sort_unstable();
-        Ok(pools.into_iter().map(|p| b32_to_hex0x(p).to_vec()).collect())
+
+        // IMPORTANT: store raw 32 bytes (no "0x", no hex encoding)
+        Ok(pools.into_iter().map(|p| p.to_vec()).collect())
     }
 }
+
 
 struct Source<'a> {
     name: &'a str,
