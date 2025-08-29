@@ -28,17 +28,6 @@ impl SourceParser for BinanceParser {
     }
 }
 
-// impl SourceParser for UniswapParser {
-//     fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>> {
-//         let json: Value = serde_json::from_str(data)?;
-//         let mut ids = HashSet::new();
-//         collect_b32_hex_strings(&json, &mut ids);
-//         let mut pools: Vec<_> = ids.into_iter().collect();
-//         pools.sort_unstable();
-//         Ok(pools.into_iter().map(|p| b32_to_hex0x(p).to_vec()).collect())
-//     }
-// }
-
 impl SourceParser for UniswapParser {
     fn parse(&self, data: &str) -> anyhow::Result<Vec<Vec<u8>>> {
         let json: Value = serde_json::from_str(data)?;
