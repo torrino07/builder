@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
 
     // ✅ Uniswap (raw 32-byte key)
     // IMPORTANT: This assumes your builder stored Uniswap keys as RAW 32 BYTES (no "0x", no hex)
-    let pool_str = "0x2d97d14362ae5a19a15adb230cf8840ee7e133bf942fd8efd754ae4d078727ea";
+    let pool_str = "0x01cad528a644340f8883c4e8649bf729e630c97cb1add6e5c1ec2c9963a497cb";
 
     // Parse the hex string once into FixedBytes<32>
     let pool: FixedBytes<32> = pool_str.parse()?; // errors if format/len invalid

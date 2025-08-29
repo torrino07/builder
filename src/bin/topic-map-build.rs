@@ -4,7 +4,6 @@ use fst::MapBuilder;
 use serde_json::Value;
 use std::collections::HashSet;
 use utils::{
-    b32_to_hex0x,
     looks_like_0x32bytes,
     parse_hex_0x_to_b32
 };
