@@ -9,7 +9,7 @@ fn main() -> anyhow::Result<()> {
     let map = Map::new(bytes)?;
 
     // ✅ Binance (ASCII key) — byte literal avoids allocation
-    let binance_symbol = b"ETHUSDT";
+    let binance_symbol = b"ETHBTC";
     if let Some(id) = map.get(binance_symbol) {
         println!("Binance 'ETHUSDT' → Topic ID: {id}");
     } else {
@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
 
     // ✅ Uniswap (raw 32-byte key)
     // IMPORTANT: This assumes your builder stored Uniswap keys as RAW 32 BYTES (no "0x", no hex)
-    let pool_str = "0x01cad528a644340f8883c4e8649bf729e630c97cb1add6e5c1ec2c9963a497cb";
+    let pool_str = "0x000a193942d54b2c53c150653b377006504bcd2892846e45495a9a0af1f45e3e";
 
     // Parse the hex string once into FixedBytes<32>
     let pool: FixedBytes<32> = pool_str.parse()?; // errors if format/len invalid
